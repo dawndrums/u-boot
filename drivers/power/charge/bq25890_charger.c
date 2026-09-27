@@ -19,7 +19,18 @@ DECLARE_GLOBAL_DATA_PTR;
 #define BQ25890_SDP_INPUT_CURRENT_500MA		0x45
 #define BQ25890_DCP_INPUT_CURRENT_1500MA	0x4f
 #define BQ25890_DCP_INPUT_CURRENT_2000MA	0x54
-#define BQ25890_DCP_INPUT_CURRENT_3000MA	0x5e
+#define BQ25890_DCP_INPUT_CURRENT_3000MA	0x7a
+
+#define BQ25890_IINLIM_MIN_UA			100000
+#define BQ25890_IINLIM_STEP_UA			50000
+#define BQ25890_IINLIM_MASK			0x3f
+#define BQ25890_EN_ILIM			0x40
+
+#define BQ25890_VINDPM_OFFSET_UV		2600000
+#define BQ25890_VINDPM_STEP_UV			100000
+#define BQ25890_VINDPM_MASK			0x7f
+#define BQ25890_FORCE_VINDPM			0x80
+#define BQ25890_VINDPM_MARGIN_UV		600000
 
 #define WATCHDOG_ENSABLE			(0x03 << 4)
 
@@ -156,6 +167,39 @@ static u8 bq25890_find_idx(u32 value, enum bq25890_table_ids id)
 	return idx - 1;
 }
 
+
+static u8 bq25890_iinlim_from_ua(u32 current_ua)
+{
+	u32 code;
+
+	if (current_ua <= BQ25890_IINLIM_MIN_UA)
+		code = 0;
+	else
+		code = (current_ua - BQ25890_IINLIM_MIN_UA) /
+			BQ25890_IINLIM_STEP_UA;
+
+	if (code > BQ25890_IINLIM_MASK)
+		code = BQ25890_IINLIM_MASK;
+
+	return BQ25890_EN_ILIM | code;
+}
+
+static u8 bq25890_vindpm_from_uv(u32 voltage_uv)
+{
+	u32 code;
+
+	if (voltage_uv <= BQ25890_VINDPM_OFFSET_UV)
+		code = 0;
+	else
+		code = (voltage_uv - BQ25890_VINDPM_OFFSET_UV) /
+			BQ25890_VINDPM_STEP_UV;
+
+	if (code > BQ25890_VINDPM_MASK)
+		code = BQ25890_VINDPM_MASK;
+
+	return BQ25890_FORCE_VINDPM | code;
+}
+
 static bool bq25890_charger_status(struct bq25890 *charger)
 {
 	int state_of_charger;
@@ -235,25 +279,29 @@ static void bq25890_charger_current_init(struct bq25890 *charger)
 	u8 charge_current =  bq25890_find_idx(BQ25890_CHARGE_CURRENT_1500MA * 1000, TBL_ICHG);
 	u8 sdp_inputcurrent = BQ25890_SDP_INPUT_CURRENT_500MA;
 	u8 dcp_inputcurrent = BQ25890_DCP_INPUT_CURRENT_1500MA;
-	int pd_inputvol,  pd_inputcurrent;
-	u16 vol_idx = 0, cur_idx;
+	int pd_inputvol = 0, pd_inputcurrent = 0;
+	int pd_ret;
+	int usb_type;
+	u8 vol_idx = 0;
+	u8 cur_idx;
 	u8 temp;
 
 	temp = bq25890_read(charger, BQ25890_CHARGEOPTION0_REG);
 	temp &= (~WATCHDOG_ENSABLE);
 	bq25890_write(charger, BQ25890_CHARGEOPTION0_REG, temp);
 
-	if (!bq25890_get_pd_output_val(charger, &pd_inputvol,
-				       &pd_inputcurrent)) {
-		printf("bq25890: pd charge %duV, %duA\n", pd_inputvol, pd_inputcurrent);
-		if (pd_inputvol > 5000000) {
-			vol_idx = bq25890_find_idx((pd_inputvol - 1280000 - 3200000),
-						   TBL_VINDPM);
-			vol_idx = vol_idx << 6;
-		}
-		cur_idx = bq25890_find_idx(pd_inputcurrent,
-					   TBL_IINLIM);
-		cur_idx  = cur_idx << 8;
+	pd_ret = bq25890_get_pd_output_val(charger, &pd_inputvol,
+				      &pd_inputcurrent);
+	if (!pd_ret) {
+		if (pd_inputvol > BQ25890_VINDPM_MARGIN_UV)
+			vol_idx = bq25890_vindpm_from_uv(pd_inputvol -
+						       BQ25890_VINDPM_MARGIN_UV);
+
+		cur_idx = bq25890_iinlim_from_ua(pd_inputcurrent);
+		printf("bq25890: PD %dmV/%dmA, VINDPM=%dmV\n",
+		       pd_inputvol / 1000, pd_inputcurrent / 1000,
+		       vol_idx ? (pd_inputvol - BQ25890_VINDPM_MARGIN_UV) / 1000 : 0);
+
 		if (pd_inputcurrent != 0) {
 			bq25890_set_auto_dpdm_detect(charger, false);
 			bq25890_write(charger, BQ25890_INPUTCURREN_REG,
@@ -265,7 +313,10 @@ static void bq25890_charger_current_init(struct bq25890 *charger)
 							  TBL_ICHG);
 		}
 	} else {
-		if (bq25890_get_usb_type() > 1)
+		usb_type = bq25890_get_usb_type();
+		printf("bq25890: PD unavailable (%d), USB type=%d; using %s fallback\n",
+		       pd_ret, usb_type, usb_type > 1 ? "DCP" : "SDP");
+		if (usb_type > 1)
 			bq25890_write(charger, BQ25890_INPUTCURREN_REG,
 				      dcp_inputcurrent);
 		else
