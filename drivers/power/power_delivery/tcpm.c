@@ -1161,6 +1161,9 @@ static void tcpm_pd_ctrl_request(struct tcpm_port *port,
 	enum pd_ctrl_msg_type type = pd_header_type_le(msg->header);
 	enum tcpm_state next_state;
 
+	printf("PD RX ctrl type=%u state=%s header=0x%04x\n",
+	       type, tcpm_states[port->state], le16_to_cpu(msg->header));
+
 	switch (type) {
 	case PD_CTRL_GOOD_CRC:
 	case PD_CTRL_PING:
@@ -1190,6 +1193,10 @@ static void tcpm_pd_ctrl_request(struct tcpm_port *port,
 	case PD_CTRL_GOTO_MIN:
 		break;
 	case PD_CTRL_PS_RDY:
+		printf("PD RX PS_RDY state=%s req=%umV/%umA\n",
+		       tcpm_states[port->state],
+		       port->req_supply_voltage,
+		       port->req_current_limit);
 		switch (port->state) {
 		case SNK_TRANSITION_SINK:
 			if (port->vbus_present) {
@@ -1237,6 +1244,7 @@ static void tcpm_pd_ctrl_request(struct tcpm_port *port,
 		}
 		break;
 	case PD_CTRL_ACCEPT:
+		printf("PD RX ACCEPT state=%s\n", tcpm_states[port->state]);
 		switch (port->state) {
 		case SNK_NEGOTIATE_CAPABILITIES:
 			port->pps_data.active = false;
@@ -3494,12 +3502,21 @@ void tcpm_poll_event(struct tcpm_port *port)
 	 * device to switch vbus to vSafe5v, or even turn off vbus.
 	 */
 	if (port->tcpc->enter_low_power_mode) {
-		if (port->tcpc->enter_low_power_mode(port->tcpc,
-						     port->attached,
-						     port->pd_capable))
+		/*
+		 * Keep the TCPC active for an attached PD sink so that we can
+		 * verify whether entering low-power mode causes the source to
+		 * drop an established higher-voltage contract back to vSafe5V.
+		 */
+		if (port->attached && port->pd_capable &&
+		    port->pwr_role == TYPEC_SINK) {
+			printf("PD sink: keep TCPC active, skip low power mode\n");
+		} else if (port->tcpc->enter_low_power_mode(port->tcpc,
+							    port->attached,
+							    port->pd_capable)) {
 			printf("failed to enter low power\n");
-		else
+		} else {
 			printf("PD chip enter low power mode\n");
+		}
 	}
 }
 EXPORT_SYMBOL_GPL(tcpm_poll_event);

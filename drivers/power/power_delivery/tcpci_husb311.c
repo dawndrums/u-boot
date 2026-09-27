@@ -158,6 +158,7 @@ static int husb311_probe(struct udevice *dev)
 		return ret;
 	}
 
+
 	chip->data.init = husb311_init;
 	chip->tcpci = tcpci_register_port(chip->udev, &chip->data);
 	if (IS_ERR(chip->tcpci))
