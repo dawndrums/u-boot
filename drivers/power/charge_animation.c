@@ -11,6 +11,7 @@
 #include <dm.h>
 #include <errno.h>
 #include <key.h>
+#include <i2c.h>
 #include <led.h>
 #include <rtc.h>
 #include <pwm.h>
@@ -617,6 +618,7 @@ static int charge_animation_show(struct udevice *dev)
 	/* Not valid charge mode, exit */
 #ifdef CONFIG_RKIMG_BOOTLOADER
 	boot_mode = rockchip_get_boot_mode();
+	printf("charge: boot_mode=%d\n", boot_mode);
 	if ((boot_mode != BOOT_MODE_CHARGING) &&
 	    (boot_mode != BOOT_MODE_UNDEFINE)) {
 		printf("Exit charge: due to boot mode\n");
@@ -755,7 +757,9 @@ static int charge_animation_show(struct udevice *dev)
 		}
 
 		current = fuel_gauge_get_current(fg);
-		if (current == -ENOSYS) {
+		if (current == -ENOSYS)
+			current = 0;
+		else if (current < 0) {
 			printf("get current failed: %d\n", current);
 			continue;
 		}
@@ -997,6 +1001,9 @@ show_images:
 
 			/* Success exit charging */
 			printf("Exit charge animation...\n");
+			ret = env_set("reboot_mode", "normal");
+			printf("charge: env_set normal ret=%d, reboot_mode=%s\n",
+			       ret, env_get("reboot_mode"));
 			charge_show_logo();
 			break;
 		} else {
@@ -1113,14 +1120,28 @@ static int charge_animation_probe(struct udevice *dev)
 
 	/* Get PWRKEY: used for wakeup and turn off/on LCD */
 	if (!key_exist(KEY_POWER)) {
-		debug("Can't find power key\n");
+		printf("Can't find power key\n");
 		return -EINVAL;
+	}
+
+	/* Diagnostic: read MAX17048 SOC register (0x04) as raw bus bytes. */
+	{
+		u8 raw_soc[2] = { 0 };
+
+		ret = dm_i2c_read(priv->fg, 0x04, raw_soc, sizeof(raw_soc));
+		if (ret) {
+			printf("MAX17048 SOC raw read failed: %d\n", ret);
+		} else {
+			printf("MAX17048 SOC raw bytes: %02x %02x (raw=0x%02x%02x)\n",
+			       raw_soc[0], raw_soc[1], raw_soc[0], raw_soc[1]);
+		}
 	}
 
 	/* Initialize charge current */
 	soc = fuel_gauge_update_get_soc(priv->fg);
+	printf("Fuel gauge SOC: %d%%\n", soc);
 	if (soc < 0 || soc > 100) {
-		debug("get soc failed: %d\n", soc);
+		printf("get soc failed: %d\n", soc);
 		return -EINVAL;
 	}
 
