@@ -32,8 +32,12 @@
 
 struct blk_desc *android_dev_desc = NULL;
 
-struct blk_desc *android_get_bootdev(void) {
-    return android_dev_desc;
+struct blk_desc *android_get_bootdev(void)
+{
+	if (android_dev_desc)
+		return android_dev_desc;
+
+	return rockchip_get_bootdev();
 }
 
 DECLARE_GLOBAL_DATA_PTR;
