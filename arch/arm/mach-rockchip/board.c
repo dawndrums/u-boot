@@ -564,13 +564,15 @@ int board_late_init(void)
 			if (fg)
 				soc = fuel_gauge_update_get_soc(fg);
 
-			if (charging > 0 && soc >= 0 && soc <= 100) {
+			if (charging > 0 && soc >= 0 && soc < 5) {
 				env_set("reboot_mode", "charging");
 				printf("Divine D.: charger online, SOC=%d%%, charging boot\n",
 				       soc);
 			} else {
 				env_set("reboot_mode", "normal");
-				if (charging > 0)
+				if (charging > 0 && soc >= 5 && soc <= 100)
+					printf("Divine D.: SOC=%d%% >= 5%%, continuing normal boot\n", soc);
+				else if (charging > 0)
 					printf("Divine D.: invalid battery SOC %d%%, normal boot\n",
 					       soc);
 				else

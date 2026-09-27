@@ -223,7 +223,8 @@ static int charge_animation_ofdata_to_platdata(struct udevice *dev)
 	pdata->auto_off_screen_interval =
 		dev_read_u32_default(dev, "rockchip,auto-off-screen-interval", 15);
 
-	if (pdata->screen_on_voltage > pdata->exit_charge_voltage)
+	if (pdata->exit_charge_voltage &&
+	    pdata->screen_on_voltage > pdata->exit_charge_voltage)
 		pdata->screen_on_voltage = pdata->exit_charge_voltage;
 
 	if (pdata->auto_exit_charge && !pdata->auto_wakeup_interval)
@@ -771,14 +772,16 @@ static int charge_animation_show(struct udevice *dev)
 			/* Is able to boot now ? */
 			if (pdata->exit_charge_level &&
 			    soc >= pdata->exit_charge_level) {
-				printf("soc(%d%%) exit charge animation...\n",
-				       soc);
+				env_set("reboot_mode", "normal");
+				printf("charge: SOC reached %d%% threshold at %d%%; continuing normal boot\n",
+				       pdata->exit_charge_level, soc);
 				break;
 			}
 			if (pdata->exit_charge_voltage &&
 			    voltage >= pdata->exit_charge_voltage) {
 				printf("vol(%d) exit charge animation...\n",
 				       voltage);
+				env_set("reboot_mode", "normal");
 				break;
 			}
 		}
@@ -991,7 +994,8 @@ show_images:
 				continue;
 			}
 
-			if (voltage < pdata->exit_charge_voltage) {
+			if (pdata->exit_charge_voltage &&
+			    voltage < pdata->exit_charge_voltage) {
 				printf("voltage=%dmv, threshold voltage=%dmv\n",
 				       voltage, pdata->exit_charge_voltage);
 				printf("Low power, unable to boot, charging...\n");
