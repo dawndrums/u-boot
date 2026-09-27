@@ -139,7 +139,7 @@
 
 &sfc {
 	u-boot,dm-spl;
-	status = "okay";
+	status = "disabled";
 
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -295,4 +295,9 @@
 &pcfg_pull_none
 {
 	u-boot,dm-spl;
+};
+
+&pcfg_pull_none_smt
+{
+        u-boot,dm-spl;
 };
