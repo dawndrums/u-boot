@@ -1,0 +1,485 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright (c) 2021 Rockchip Electronics Co., Ltd
+ *
+ */
+
+/dts-v1/;
+#include "rk3588.dtsi"
+#include "rockchip/rk3588-rk806-single.dtsi"
+#include "rk3588-u-boot.dtsi"
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/usb/pd.h>
+
+/ {
+	model = "Divine D.";
+	compatible = "dawndrums,divine-d.", "rockchip,rk3588";
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		u-boot,dm-pre-reloc;
+
+		u_boot_cma: u-boot-cma@d0000000 {
+			u-boot,dm-pre-reloc;
+			reg = <0x0 0xd0000000 0x0 0x20000000>;
+		};
+	};
+
+	vcc5v0_sys: vcc5v0-sys {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_sys";
+		regulator-always-on;
+		regulator-boot-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+
+	vcc_5v0: vcc-5v0 {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_5v0";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-boot-on;
+		regulator-always-on;
+		enable-active-high;
+		gpio = <&gpio4 RK_PA3 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc_5v0_en>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vcc5v0_host: vcc5v0-host-regulator {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v0_host";
+		regulator-boot-on;
+		regulator-always-on;
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		gpio = <&gpio4 RK_PB5 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&vcc5v0_host_en>;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vcc3v3_pcie: vcc3v3-pcie {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_pcie";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	vcc3v3_lcd0_n: regulator-vcc3v3-lcd0-n {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3_lcd0_n";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	vcc1v8_lcd0_n: regulator-vcc1v8-lcd0-n {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "vcc1v8_lcd0_n";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	led_sys: led-sys {
+		u-boot,dm-pre-reloc;
+		compatible = "regulator-fixed";
+		regulator-name = "led_sys";
+		enable-active-high;
+		gpio = <&gpio1 RK_PC0 GPIO_ACTIVE_HIGH>; /* Turn on user LED */
+		regulator-boot-on;
+		regulator-always-on;
+		vin-supply = <&vcc5v0_sys>;
+	};
+
+	adc-keys {
+		compatible = "adc-keys";
+		io-channels = <&saradc 1>;
+		io-channel-names = "buttons";
+		keyup-threshold-microvolt = <1800000>;
+		u-boot,dm-pre-reloc;
+		status = "okay";
+
+		volumeup-key {
+			u-boot,dm-pre-reloc;
+			linux,code = <KEY_VOLUMEUP>;
+			label = "volume up";
+			press-threshold-microvolt = <1750>;
+		};
+	};
+
+	battery: battery {
+		u-boot,dm-pre-reloc;
+
+		compatible = "simple-battery";
+		device-chemistry = "lithium-ion-polymer";
+		charge-full-design-microamp-hours = <3000000>;
+		voltage-max-design-microvolt = <4400000>;
+		constant-charge-voltage-max-microvolt = <4400000>;
+	};
+};
+
+&combphy0_ps {
+	status = "okay";
+	u-boot,dm-pre-reloc;
+};
+
+&pcie2x1l2 {
+	status = "disabled";
+	reset-gpios = <&gpio3 RK_PD1 GPIO_ACTIVE_HIGH>;
+	u-boot,dm-pre-reloc;
+	vpcie3v3-supply = <&vcc3v3_pcie>;
+};
+
+&usb_host0_ehci {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&usb_host0_ohci {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&usb2phy2_grf {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&u2phy2 {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&u2phy2_host {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&usb_host1_ehci {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&usb_host1_ohci {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&usb2phy3_grf {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&u2phy3 {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&u2phy3_host {
+	status = "disabled";
+	u-boot,dm-pre-reloc;
+};
+
+&sfc {
+	status = "disabled";
+	pinctrl-names = "default";
+	pinctrl-0 = <&fspim0_pins>;
+};
+
+&spi_nor {
+	status = "disabled";
+};
+
+&pinctrl {
+
+	/delete-node/ fspi;
+	fspi {
+		u-boot,dm-spl;
+		fspim0_pins: fspim0-pins {
+			u-boot,dm-spl;
+			rockchip,pins =
+				/* fspi_clk_m0 */
+				<2 RK_PA0 2 &pcfg_pull_none>,
+				/* fspi_cs0n_m0 */
+				<2 RK_PD6 2 &pcfg_pull_none>,
+				/* fspi_d0_m0 */
+				<2 RK_PD0 2 &pcfg_pull_none>,
+				/* fspi_d1_m0 */
+				<2 RK_PD1 2 &pcfg_pull_none>,
+				/* fspi_d2_m0 */
+				<2 RK_PD2 2 &pcfg_pull_none>,
+				/* fspi_d3_m0 */
+				<2 RK_PD3 2 &pcfg_pull_none>;
+		};
+	};
+
+	usb {
+		u-boot,dm-pre-reloc;
+		vcc5v0_host_en: vcc5v0-host-en {
+			u-boot,dm-pre-reloc;
+			rockchip,pins = <4 RK_PB5 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	power {
+		u-boot,dm-spl;
+		vcc_5v0_en: vcc-5v0-en {
+			u-boot,dm-spl;
+			rockchip,pins = <4 RK_PA3 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+
+	display {
+		rm67199_reset: rm67199-reset {
+			u-boot,dm-pre-reloc;
+			rockchip,pins =
+				<1 RK_PC6 RK_FUNC_GPIO &pcfg_pull_up>;
+		};
+	};
+
+	gauge {
+		fuel_gauge: fuel-gauge {
+			u-boot,dm-pre-reloc;
+			rockchip,pins = <0 RK_PD0 RK_FUNC_GPIO &pcfg_pull_none>;
+		};
+	};
+};
+
+&i2c6m3_xfer {
+	u-boot,dm-pre-reloc;
+};
+
+&i2c6 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c6m3_xfer>;
+
+	max17048: fuel-gauge@36 {
+		u-boot,dm-pre-reloc;
+		compatible = "maxim,max17048";
+		reg = <0x36>;
+
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PD0 IRQ_TYPE_LEVEL_LOW>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&fuel_gauge>;
+
+		maxim,double-soc;
+		maxim,alert-low-soc-level = <5>;
+		monitored-battery = <&battery>;
+		power-supplies = <&bq25890>;
+		status = "okay";
+	};
+
+	bq25890: charger@6a {
+		u-boot,dm-pre-reloc;
+		compatible = "ti,bq25890";
+		reg = <0x6a>;
+		ti,charge-current = <1500000>;
+
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PD5 IRQ_TYPE_LEVEL_LOW>;
+		status = "okay";
+	};
+
+	husb311: husb311@4e {
+		u-boot,dm-pre-reloc;
+		compatible = "hynetek,husb311";
+		reg = <0x4e>;
+
+		interrupt-parent = <&gpio0>;
+		interrupts = <RK_PC4 IRQ_TYPE_LEVEL_LOW>;
+		int-n-gpios = <&gpio0 RK_PC4 GPIO_ACTIVE_LOW>;
+		status = "okay";
+
+		connector {
+			u-boot,dm-pre-reloc;
+			compatible = "usb-c-connector";
+			power-role = "sink";
+
+			sink-pdos = <
+				PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)
+				PDO_FIXED(9000, 3000, PDO_FIXED_USB_COMM)
+			>;
+
+			op-sink-microwatt = <27000000>;
+		};
+	};
+};
+&{/} {
+	charge_animation {
+		u-boot,dm-pre-reloc;
+		compatible = "rockchip,uboot-charge";
+
+		rockchip,uboot-charge-on = <1>;
+		rockchip,uboot-exit-charge-auto = <1>;
+		rockchip,uboot-exit-charge-level = <5>;
+		rockchip,uboot-exit-charge-voltage = <0>;
+		rockchip,uboot-low-power-voltage = <3300>;
+		rockchip,screen-on-voltage = <3500>;
+	};
+};
+
+&display_subsystem {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&route_dsi0 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&vop {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+	assigned-clocks = <&cru DCLK_VOP3>;
+	assigned-clock-parents = <&cru PLL_V0PLL>;
+};
+
+&vop_mmu {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&mipidcphy0 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&dsi0_in_vp3 {
+	u-boot,dm-pre-reloc;
+	status = "okay";
+};
+
+&dsi0 {
+	u-boot,dm-pre-reloc;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	phys = <&mipidcphy0>;
+	phy-names = "dcphy";
+
+	panel@0 {
+		u-boot,dm-pre-reloc;
+		compatible = "raydium,rm67199";
+		reg = <0>;
+		status = "okay";
+
+		v3p3-supply = <&vcc3v3_lcd0_n>;
+		v1p8-supply = <&vcc1v8_lcd0_n>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&rm67199_reset>;
+		reset-gpios = <&gpio1 RK_PC6 GPIO_ACTIVE_LOW>;
+
+		dsi-lanes = <4>;
+		video-mode = <2>;
+
+		width-mm = <68>;
+		height-mm = <121>;
+
+		display-timings {
+			u-boot,dm-pre-reloc;
+			native-mode = <&rm67199_timing0>;
+
+			rm67199_timing0: timing0 {
+				u-boot,dm-pre-reloc;
+				clock-frequency = <121000000>;
+
+				hactive = <1080>;
+				hfront-porch = <20>;
+				hsync-len = <2>;
+				hback-porch = <34>;
+
+				vactive = <1920>;
+				vfront-porch = <10>;
+				vsync-len = <2>;
+				vback-porch = <4>;
+
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+
+		port {
+			rm67199_in_dsi0: endpoint {
+				remote-endpoint = <&dsi0_out_rm67199>;
+			};
+		};
+	};
+
+	/*
+	 * The base RK3588S DTSI provides DSI0 port@0 as the VOP input.
+	 * Add port@1 here as the DSI host output to the panel.
+	 */
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			dsi0_out_rm67199: endpoint {
+				remote-endpoint = <&rm67199_in_dsi0>;
+			};
+		};
+	};
+};
+
+&sys_grf {
+	u-boot,dm-pre-reloc;
+};
+
+&vo1_grf {
+	u-boot,dm-pre-reloc;
+};
+
+&pmu {
+	u-boot,dm-pre-reloc;
+};
+
+&power {
+	u-boot,dm-pre-reloc;
+};
+
+&spi2 {
+	u-boot,dm-pre-reloc;
+};
+
+&spi2m2_cs0 {
+	u-boot,dm-pre-reloc;
+};
+
+&spi2m2_pins {
+	u-boot,dm-pre-reloc;
+};
+
+&gpio0 {
+	u-boot,dm-pre-reloc;
+};
+
+&rk806single {
+	u-boot,dm-pre-reloc;
+};
