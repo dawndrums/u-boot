@@ -22,6 +22,7 @@
 #include <fdt_support.h>
 #include <io-domain.h>
 #include <image.h>
+#include <lmb.h>
 #include <key.h>
 #include <memblk.h>
 #include <misc.h>
@@ -34,12 +35,14 @@
 #include <sysmem.h>
 #include <video_rockchip.h>
 #include <xbc.h>
+#include <asm/cache.h>
 #include <asm/io.h>
 #include <asm/gpio.h>
 #include <android_avb/rk_avb_ops_user.h>
 #include <dm/uclass-internal.h>
 #include <dm/root.h>
 #include <power/charge_display.h>
+#include <power/fuel_gauge.h>
 #include <power/regulator.h>
 #include <optee_include/OpteeClientInterface.h>
 #include <optee_include/OpteeClientApiLib.h>
@@ -528,7 +531,66 @@ int board_late_init(void)
 	boot_from_udisk();
 #endif
 #ifdef CONFIG_DM_CHARGE_DISPLAY
-	charge_display();
+	{
+		struct blk_desc *bootdev_before;
+		struct blk_desc *bootdev_after;
+		struct udevice *dev;
+		struct udevice *fg = NULL;
+		int charging = 0;
+		int soc = -ENODEV;
+		int cap;
+		int ret;
+
+		/* Require charger online and a valid battery SOC on Divine D. */
+		if (!fdt_node_check_compatible(gd->fdt_blob, 0,
+					       "dawndrums,divine-d") ||
+		    !fdt_node_check_compatible(gd->fdt_blob, 0,
+					       "dawndrums,divine-d.")) {
+			for (uclass_first_device(UCLASS_FG, &dev);
+			     dev;
+			     uclass_next_device(&dev)) {
+				cap = fuel_gauge_capability(dev);
+
+				if ((cap & FG_CAP_CHARGER) && charging <= 0) {
+					ret = fuel_gauge_get_chrg_online(dev);
+					if (ret > 0)
+						charging = ret;
+				}
+
+				if ((cap & FG_CAP_FUEL_GAUGE) && !fg)
+					fg = dev;
+			}
+
+			if (fg)
+				soc = fuel_gauge_update_get_soc(fg);
+
+			if (charging > 0 && soc >= 0 && soc <= 100) {
+				env_set("reboot_mode", "charging");
+				printf("Divine D.: charger online, SOC=%d%%, charging boot\n",
+				       soc);
+			} else {
+				env_set("reboot_mode", "normal");
+				if (charging > 0)
+					printf("Divine D.: invalid battery SOC %d%%, normal boot\n",
+					       soc);
+				else
+					printf("Divine D.: charger offline, normal boot\n");
+			}
+		}
+
+		printf("Enter board's charge display\n");
+		bootdev_before = rockchip_get_bootdev();
+		printf("charge: bootdev before charge_display = %p\n",
+		       bootdev_before);
+
+		printf("charge: about to enter charge_display()\n");
+		ret = charge_display();
+		printf("charge_display ret= %d\n", ret);
+
+		bootdev_after = rockchip_get_bootdev();
+		printf("charge: bootdev after charge_display = %p\n",
+		       bootdev_after);
+	}
 #endif
 
 #ifdef CONFIG_ROCKCHIP_MINIDUMP
@@ -897,6 +959,7 @@ void board_lmb_reserve(struct lmb *lmb)
 	sprintf(bootm_mapsize, "0x%llx", size);
 	env_set("bootm_low", bootm_low);
 	env_set("bootm_mapsize", bootm_mapsize);
+
 }
 #endif
 
@@ -930,6 +993,34 @@ int board_bidram_reserve(struct bidram *bidram)
 #ifdef CONFIG_SYSMEM
 int board_sysmem_reserve(struct sysmem *sysmem)
 {
+	const void *blob = gd->fdt_blob;
+	const fdt32_t *reg;
+	u64 base, size;
+	int node, len;
+
+	node = fdt_path_offset(blob, "/reserved-memory/u-boot-cma@d0000000");
+	if (node >= 0) {
+		reg = fdt_getprop(blob, node, "reg", &len);
+		if (!reg || len < 4 * sizeof(*reg)) {
+			printf("U-Boot CMA: invalid reg property\n");
+			return -EINVAL;
+		}
+
+		base = ((u64)fdt32_to_cpu(reg[0]) << 32) |
+		       fdt32_to_cpu(reg[1]);
+		size = ((u64)fdt32_to_cpu(reg[2]) << 32) |
+		       fdt32_to_cpu(reg[3]);
+
+		if (!sysmem_alloc_base_by_name("U-BOOT-CMA", base, size)) {
+			printf("U-Boot CMA: failed to reserve 0x%llx bytes at 0x%llx\n",
+			       size, base);
+			return -ENOMEM;
+		}
+
+		printf("U-Boot CMA: reserved 0x%llx bytes at 0x%llx\n",
+		       size, base);
+	}
+
 #ifdef CONFIG_SKIP_RELOCATE_UBOOT
 	if (!sysmem_alloc_base_by_name("NO-RELOC-CODE",
 	    CONFIG_SYS_TEXT_BASE, SZ_2M)) {
