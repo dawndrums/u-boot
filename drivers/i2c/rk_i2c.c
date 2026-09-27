@@ -17,6 +17,7 @@
 #include <asm/arch/i2c.h>
 #include <asm/arch/periph.h>
 #include <dm/pinctrl.h>
+#include <reset.h>
 #include <linux/sizes.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -216,8 +217,13 @@ static int rk_i2c_send_start_bit(struct rk_i2c *i2c, u32 con)
 	debug("I2c Send Start bit.\n");
 	writel(I2C_IPD_ALL_CLEAN, &regs->ipd);
 
+	/*
+	 * Match the known-good mainline RK3588 sequence:
+	 * issue a bare START first, then enable START interrupt.
+	 * Apply transfer mode/config only after START completes.
+	 */
+	writel(I2C_CON_EN | I2C_CON_START, &regs->con);
 	writel(I2C_STARTIEN, &regs->ien);
-	writel(I2C_CON_EN | I2C_CON_START | i2c->cfg | con, &regs->con);
 
 	start = get_timer(0);
 	while (1) {
@@ -226,7 +232,11 @@ static int rk_i2c_send_start_bit(struct rk_i2c *i2c, u32 con)
 			break;
 		}
 		if (get_timer(start) > I2C_TIMEOUT_MS) {
-			debug("I2C Send Start Bit Timeout\n");
+			printf("rk_i2c START timeout: regs=%p con=0x%08x clkdiv=0x%08x "
+			       "ien=0x%08x ipd=0x%08x fcnt=0x%08x\n",
+			       regs, readl(&regs->con), readl(&regs->clkdiv),
+			       readl(&regs->ien), readl(&regs->ipd),
+			       readl(&regs->fcnt));
 			rk_i2c_show_regs(regs);
 			return -ETIMEDOUT;
 		}
@@ -551,8 +561,38 @@ static int rockchip_i2c_ofdata_to_platdata(struct udevice *bus)
 static int rockchip_i2c_probe(struct udevice *bus)
 {
 	struct rk_i2c *priv = dev_get_priv(bus);
+	struct reset_ctl_bulk resets;
+	int ret;
 
 	priv->regs = dev_read_addr_ptr(bus);
+
+	ret = reset_get_bulk(bus, &resets);
+	if (ret == -ENOENT || ret == -ENOTSUPP) {
+		printf("%s: no reset controls (%d)\n", bus->name, ret);
+	} else if (ret) {
+		printf("%s: failed to get resets: %d\n", bus->name, ret);
+		return ret;
+	} else {
+		ret = reset_deassert_bulk(&resets);
+		if (ret) {
+			printf("%s: failed to deassert resets: %d\n",
+			       bus->name, ret);
+			reset_release_bulk(&resets);
+			return ret;
+		}
+
+		printf("%s: deasserted %u reset(s)\n",
+		       bus->name, resets.count);
+		/*
+		 * Keep the resets deasserted. reset_release_bulk() asserts
+		 * them again before freeing the handles.
+		 */
+	}
+
+	printf("%s: regs=%p clk=%lu Hz version=%u con=0x%08x clkdiv=0x%08x ipd=0x%08x\n",
+	       bus->name, priv->regs, clk_get_rate(&priv->clk),
+	       rk3x_i2c_get_version(priv), readl(&priv->regs->con),
+	       readl(&priv->regs->clkdiv), readl(&priv->regs->ipd));
 
 	return 0;
 }
