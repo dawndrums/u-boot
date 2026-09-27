@@ -123,6 +123,9 @@ int rockchip_get_boot_mode(void)
 		} else if (!strcmp(env_reboot_mode, "normal")) {
 			printf("boot mode: normal(env)\n");
 			return BOOT_MODE_NORMAL;
+		} else if (!strcmp(env_reboot_mode, "charging")) {
+			printf("boot mode: charging (env)\n");
+			return BOOT_MODE_CHARGING;
 		}
 	}
 
